@@ -147,6 +147,16 @@ for T in (Dec32, Dec64, Dec128)
         @test xd == Tf(x) == T(Tf(x)) == Tf(xd)
     end
 
+    # issue #92
+    p = -2
+    @test T(2)^-2 == parse(T, "0.25") == T(2)^p
+
+    # exercise literal_pow
+    @test T(2)^0 === T(1)
+    @test T(2)^1 === T(2)
+    @test T(2)^2 === T(4)
+    @test T(2)^3 === T(8)
+
     @test trunc(T(2.7)) === floor(T(2.7)) === round(T(2.7), RoundDown) === round(T(2.7), RoundToZero) === T(2)
     @test ceil(T(2.3)) === round(T(2.3), RoundUp) === round(T(2.3), RoundFromZero) === T(3)
     @test round(T(1.5)) === round(T(2.5)) === round(T(1.5), RoundNearest) === round(T(2.5), RoundNearest) === T(2)
@@ -183,7 +193,7 @@ for T in (Dec32, Dec64, Dec128)
     TI = eval(Symbol(string("UInt", sizeof(T)*8)))
     @test bswap(xd) == reinterpret(T, bswap(reinterpret(TI, xd)))
 
-    @test_throws InexactError parse(T, "1e10000")
+    @test parse(T, "1e10000") == T(Inf)
     @test_throws DomainError asin(xd)
     @test_throws DomainError sqrt(yd)
     @test_throws DomainError acosh(zd)
@@ -212,3 +222,6 @@ end
 
 @test Float64(d64"1e100") == 1e100
 
+# issue #93
+@test parse(Dec64, "3935767060.093896713") == d64"3.935767060093897e9" ==
+      Dec64(d128"3935767060.093896713")

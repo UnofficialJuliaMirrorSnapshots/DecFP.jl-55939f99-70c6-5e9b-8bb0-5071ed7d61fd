@@ -39,9 +39,13 @@ macro xchk(x, exc, args...)
     end
     quote
         ret = $(esc(x))
-        f = unsafe_load(flags[])
-        unsafe_store!(flags[], 0)
-        f & $mask != 0 && throw($exc($(map(esc,args)...)))
+        if $exc === nothing
+            unsafe_store!(flags[], 0)
+        else
+            f = unsafe_load(flags[])
+            unsafe_store!(flags[], 0)
+            f & $mask != 0 && throw($exc($(map(esc,args)...)))
+        end
         ret
     end
 end
@@ -213,7 +217,7 @@ for w in (32,64,128)
             if isnan(x) && !isnanstr(s)
                 throw(ArgumentError("invalid number format $s"))
             end
-            return @xchk(x, InexactError, :parse, $BID, s)
+            return @xchk(x, nothing)
         end
 
         $BID(x::AbstractString) = parse($BID, x)
@@ -422,7 +426,7 @@ for w in (32,64,128)
             @eval promote_rule(::Type{$BID}, ::Type{$BID′}) = $BID
         end
         if w != w′
-            @eval Base.convert(::Type{$BID}, x::$BID′) = @xchk(ccall(($(string("__bid",w′,"_to_","bid",w)), libbid), $BID, ($BID′,), x), InexactError, :convert, $BID, x, mask=INEXACT)
+            @eval Base.convert(::Type{$BID}, x::$BID′) = @xchk(ccall(($(string("__bid",w′,"_to_","bid",w)), libbid), $BID, ($BID′,), x), nothing)
         end
 
         # promote binary*decimal -> decimal, for consistency with other operations above
@@ -493,6 +497,13 @@ function Base.sqrt(z::Complex{T}) where {T<:DecimalFloatingPoint}
     end
     Complex(ξ,η)
 end
+
+# see issue #92 — the fallback power_by_squaring fails for p < 0, and this is more accurate:
+Base.:^(x::DecimalFloatingPoint, p::Integer) = x^oftype(x, p)
+@inline Base.literal_pow(::typeof(^), x::DecimalFloatingPoint, ::Val{0}) = one(x)
+@inline Base.literal_pow(::typeof(^), x::DecimalFloatingPoint, ::Val{1}) = x
+@inline Base.literal_pow(::typeof(^), x::DecimalFloatingPoint, ::Val{2}) = x*x
+@inline Base.literal_pow(::typeof(^), x::DecimalFloatingPoint, ::Val{3}) = x*x*x
 
 # used for next/prevfloat:
 const pinf128 = _parse(Dec128, "+Inf")
